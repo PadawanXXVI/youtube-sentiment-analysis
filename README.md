@@ -63,18 +63,57 @@ youtube-sentiment-analysis/
 
 ## 📌 Organização no GitHub
 
-- **GitHub Projects**: Quadro Kanban com colunas *Backlog*, *Em andamento*, *Concluído*
-- **Milestones**: Etapas do projeto divididas por entregas
-- **Issues**: Tarefas específicas com labels como `coleta`, `NLP`, `visualização`, `documentação`
+- **GitHub Projects**: Quadro Kanban com colunas *Backlog*, *Em andamento*, *Concluído*  
+- **Milestones**: Etapas do projeto divididas por entregas  
+- **Issues**: Tarefas específicas com labels como `coleta`, `pré-processamento`, `análise de sentimentos`, `visualização`, `documentação`
+
+---
+
+## ✅ Progresso do Projeto
+
+Acompanhamento das principais tarefas, vinculadas às **milestones** e **issues**:
+
+### Etapa 1 – Coleta e Pré-processamento
+- [ ] Implementar coleta de comentários via YouTube API (#1)  
+- [ ] Pré-processar textos coletados (#2)  
+
+### Etapa 2 – Análise de Sentimentos
+- [ ] Treinar modelo de análise de sentimentos (#3)  
+
+### Etapa 3 – Visualização dos Resultados
+- [ ] Gerar visualizações dos resultados (#4)  
+
+### Etapa 4 – Relatório Final e Apresentação
+- [ ] Redigir relatório final e preparar apresentação (#5)  
+
+---
+
+## 🗂️ Quadro Kanban
+
+O projeto é acompanhado no **GitHub Projects** usando as colunas:
+
+- **Backlog** → tarefas planejadas, ainda não iniciadas  
+- **Em andamento** → tarefas em progresso pela equipe  
+- **Concluído** → tarefas finalizadas e revisadas  
+
+Exemplo inicial:
+
+| Backlog | Em andamento | Concluído |
+|---------|--------------|-----------|
+| Implementar coleta de comentários (#1) | – | – |
+| Pré-processar textos (#2) | – | – |
+| Treinar modelo de análise de sentimentos (#3) | – | – |
+| Gerar visualizações (#4) | – | – |
+| Relatório final (#5) | – | – |
 
 ---
 
 ## 📊 Resultados Esperados
 
-- Classificação dos sentimentos por comentário
-- Gráficos de polaridade e nuvem de palavras
-- Comparação entre vídeos e temas
-- Relatório final com interpretação dos padrões encontrados
+- Classificação dos sentimentos por comentário  
+- Gráficos de polaridade e nuvem de palavras  
+- Comparação entre vídeos e temas  
+- Relatório final com interpretação dos padrões encontrados  
 
 ---
 
