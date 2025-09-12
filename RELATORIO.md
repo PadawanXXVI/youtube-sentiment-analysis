@@ -32,3 +32,4 @@ Este documento registra os entregáveis semanais da disciplina **Mineração de 
 - Anderson de Matos Guimarães  
 - Gustavo Stefano Thomazinho  
 - Renan Ost  
+| 11/09/2025 | Implementação do .env para proteger a chave da API e conversão do script youtube.py em notebook estruturado (youtube.ipynb), com coleta inicial de comentários e exportação para CSV. | Anderson de Matos Guimarães, Gustavo Stefano Thomazinho e Renan Ost | Concluído |
