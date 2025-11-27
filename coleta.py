@@ -4,51 +4,80 @@ import time
 import requests
 import pandas as pd
 from typing import List, Dict, Optional
-from dotenv import load_dotenv
 
-# Carrega variáveis do .env
-load_dotenv()
+# ============================================================
+#   CARREGAR A API KEY CORRETAMENTE (STREAMLIT CLOUD)
+# ============================================================
+try:
+    import streamlit as st
+    YOUTUBE_API_KEY = st.secrets["YOUTUBE_API_KEY"]
+except:
+    YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 DEFAULT_MAX_VIDEOS = int(os.getenv("MAX_VIDEOS", 5))
 
 
 # ============================================================
-#   Função para extrair channel_id de uma URL ou ID direto
+#   Função completa para extrair canal de QUALQUER LINK
 # ============================================================
-def extrair_channel_id(canal_input: str) -> str:
+def extrair_channel_id(link: str) -> str:
     """
-    Recebe um ID de canal ou URL e devolve o channel_id.
     Aceita:
-      - https://www.youtube.com/channel/ID
-      - ID direto
+      - link de vídeo: https://youtube.com/watch?v=ID
+      - link de canal: https://youtube.com/channel/ID
+      - link @handle: https://youtube.com/@nome
+      - link /user/
+      - link /c/
+      - ID direto começando por UC
     """
-    canal_input = canal_input.strip()
+    link = link.strip()
 
-    # Se NÃO contém youtube.com, assume ser o ID
-    if "youtube.com" not in canal_input:
-        return canal_input
+    # Caso o usuário insira diretamente o ID do canal
+    if re.fullmatch(r"UC[\w-]{20,}", link):
+        return link
 
-    # Extrai do padrão /channel/ID
-    match = re.search(r"youtube\.com/channel/([^/?]+)", canal_input)
-    if match:
-        return match.group(1)
+    # Vídeo
+    if "watch?v=" in link:
+        video_id = link.split("watch?v=")[1].split("&")[0]
+        url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet&id={video_id}&key={YOUTUBE_API_KEY}"
+        resp = requests.get(url).json()
+        return resp["items"][0]["snippet"]["channelId"]
 
-    raise ValueError(
-        "⚠ Não consegui extrair channel_id da URL.\n"
-        "Use uma URL do tipo: https://www.youtube.com/channel/ID ou informe o ID diretamente."
-    )
+    # Handle @nome
+    if "/@" in link:
+        handle = link.split("/@")[1].split("/")[0]
+        url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={handle}&key={YOUTUBE_API_KEY}"
+        resp = requests.get(url).json()
+        return resp["items"][0]["snippet"]["channelId"]
+
+    # /c/ personalizado
+    if "/c/" in link:
+        custom = link.split("/c/")[1].split("/")[0]
+        url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={custom}&key={YOUTUBE_API_KEY}"
+        resp = requests.get(url).json()
+        return resp["items"][0]["snippet"]["channelId"]
+
+    # /user/
+    if "/user/" in link:
+        user = link.split("/user/")[1].split("/")[0]
+        url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={user}&key={YOUTUBE_API_KEY}"
+        resp = requests.get(url).json()
+        return resp["items"][0]["snippet"]["channelId"]
+
+    # /channel/
+    if "/channel/" in link:
+        return link.split("/channel/")[1].split("/")[0]
+
+    raise ValueError("Não consegui identificar o canal a partir do link informado.")
 
 
 # ============================================================
-#   Lista os vídeos recentes de um canal
+#   Lista vídeos recentes do canal
 # ============================================================
 def listar_videos_canal(channel_id: str, max_videos: int = DEFAULT_MAX_VIDEOS) -> List[Dict]:
-    """
-    Lista os últimos vídeos do canal usando o endpoint 'search'.
-    """
+
     if not YOUTUBE_API_KEY:
-        raise ValueError("YOUTUBE_API_KEY não encontrada no .env.")
+        raise ValueError("A variável YOUTUBE_API_KEY não foi carregada no Streamlit Secrets.")
 
     url = "https://www.googleapis.com/youtube/v3/search"
     params = {
@@ -61,34 +90,28 @@ def listar_videos_canal(channel_id: str, max_videos: int = DEFAULT_MAX_VIDEOS) -
     }
 
     resp = requests.get(url, params=params)
+    data = resp.json()
+
     if resp.status_code != 200:
         raise RuntimeError(f"Erro ao listar vídeos: {resp.status_code} - {resp.text}")
 
-    data = resp.json()
-    items = data.get("items", [])
-
-    videos = []
-    for item in items:
-        videos.append({
+    return [
+        {
             "video_id": item["id"]["videoId"],
             "video_title": item["snippet"]["title"],
             "video_published_at": item["snippet"]["publishedAt"],
-        })
-
-    return videos
+        }
+        for item in data.get("items", [])
+    ]
 
 
 # ============================================================
 #   Coleta comentários de UM vídeo
 # ============================================================
 def coletar_comentarios_video(video_id: str, max_comments: int = 200) -> List[Dict]:
-    """
-    Coleta até 'max_comments' comentários de um vídeo.
-    Usa o endpoint 'commentThreads'.
-    """
 
     if not YOUTUBE_API_KEY:
-        raise ValueError("YOUTUBE_API_KEY não encontrada no .env.")
+        raise ValueError("A variável YOUTUBE_API_KEY não foi carregada no Streamlit Secrets.")
 
     url = "https://www.googleapis.com/youtube/v3/commentThreads"
     params = {
@@ -109,53 +132,50 @@ def coletar_comentarios_video(video_id: str, max_comments: int = 200) -> List[Di
             params["pageToken"] = page_token
 
         resp = requests.get(url, params=params)
+        data = resp.json()
+
         if resp.status_code != 200:
             print(f"Erro ao coletar comentários do vídeo {video_id}: {resp.text}")
             break
 
-        data = resp.json()
-        items = data.get("items", [])
-
-        for item in items:
+        for item in data.get("items", []):
             snippet = item["snippet"]["topLevelComment"]["snippet"]
+
             comentarios.append({
                 "video_id": video_id,
                 "author": snippet.get("authorDisplayName", ""),
                 "comment": snippet.get("textDisplay", ""),
                 "like_count": snippet.get("likeCount", 0),
-                "published_at": snippet.get("publishedAt", ""),
+                "published_at": snippet.get("publishedAt", "")
             })
 
             total += 1
             if total >= max_comments:
                 return comentarios
 
-        # Verifica próxima página
         page_token = data.get("nextPageToken")
         if not page_token:
             break
 
-        time.sleep(0.3)  # evita limite da API
+        time.sleep(0.3)
 
     return comentarios
 
 
 # ============================================================
-#   Coleta comentários de TODOS vídeos do canal
+#   Coleta comentários de TODOS vídeos
 # ============================================================
 def coletar_comentarios_canal(canal_input: str,
                               max_videos: int = DEFAULT_MAX_VIDEOS,
                               max_comments_por_video: int = 200) -> pd.DataFrame:
-    """
-    Recebe uma URL/ID de canal e retorna DataFrame com TODOS os comentários.
-    """
+
     channel_id = extrair_channel_id(canal_input)
     videos = listar_videos_canal(channel_id, max_videos=max_videos)
 
     all_comments = []
-    for video in videos:
-        vid = video["video_id"]
-        comments = coletar_comentarios_video(vid, max_comments=max_comments_por_video)
+    for v in videos:
+        vid = v["video_id"]
+        comments = coletar_comentarios_video(vid, max_comments_por_video)
         all_comments.extend(comments)
 
     return pd.DataFrame(all_comments)
