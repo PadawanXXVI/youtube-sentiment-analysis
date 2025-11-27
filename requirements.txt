@@ -1,6 +1,6 @@
 streamlit==1.40.2
 
-# Dependências que o Streamlit exige explicitamente
+# Dependências do Streamlit
 rich==13.9.4
 markdown-it-py==3.0.0
 
@@ -11,14 +11,14 @@ matplotlib==3.10.7
 seaborn==0.13.2
 requests==2.32.5
 
-# NLP / Transformers
+# NLP e Transformers
 transformers==4.57.1
 torch==2.9.0
 tokenizers==0.22.1
 huggingface-hub==0.35.3
 sentencepiece==0.2.0
 
-# Pré-processamento e utilidades
+# Utilidades / Pré-processamento
 langdetect==1.0.9
 emoji==2.15.0
 regex==2024.4.28
