@@ -14,67 +14,80 @@ try:
 except:
     YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
-DEFAULT_MAX_VIDEOS = int(os.getenv("MAX_VIDEOS", 5))
+
+# ============================================================
+#   EXTRAI VIDEO ID — SE FOR LINK DE VÍDEO
+# ============================================================
+def extrair_video_id(link: str) -> Optional[str]:
+    """
+    Retorna o video_id se o link contiver watch?v=
+    """
+    if "watch?v=" in link:
+        return link.split("watch?v=")[1].split("&")[0]
+    return None
 
 
 # ============================================================
-#   Função completa para extrair canal de QUALQUER LINK
+#   EXTRAI CHANNEL ID — SUPORTA QUALQUER TIPO DE LINK
 # ============================================================
 def extrair_channel_id(link: str) -> str:
-    """
-    Aceita:
-      - link de vídeo: https://youtube.com/watch?v=ID
-      - link de canal: https://youtube.com/channel/ID
-      - link @handle: https://youtube.com/@nome
-      - link /user/
-      - link /c/
-      - ID direto começando por UC
-    """
     link = link.strip()
 
-    # Caso o usuário insira diretamente o ID do canal
+    # ID direto
     if re.fullmatch(r"UC[\w-]{20,}", link):
         return link
 
-    # Vídeo
+    # Vídeo → descobrir canal
     if "watch?v=" in link:
-        video_id = link.split("watch?v=")[1].split("&")[0]
+        video_id = extrair_video_id(link)
         url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet&id={video_id}&key={YOUTUBE_API_KEY}"
         resp = requests.get(url).json()
         return resp["items"][0]["snippet"]["channelId"]
 
-    # Handle @nome
+    # Handle @
     if "/@" in link or link.startswith("@"):
         handle = link.split("@")[1].split("/")[0]
-        url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={handle}&key={YOUTUBE_API_KEY}"
-        resp = requests.get(url).json()
+        search_url = (
+            "https://www.googleapis.com/youtube/v3/search?"
+            f"part=snippet&type=channel&q={handle}&key={YOUTUBE_API_KEY}"
+        )
+        resp = requests.get(search_url).json()
         return resp["items"][0]["snippet"]["channelId"]
 
-    # /c/ personalizado
+    # /c/
     if "/c/" in link:
         custom = link.split("/c/")[1].split("/")[0]
-        url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={custom}&key={YOUTUBE_API_KEY}"
-        resp = requests.get(url).json()
+        search_url = (
+            "https://www.googleapis.com/youtube/v3/search?"
+            f"part=snippet&type=channel&q={custom}&key={YOUTUBE_API_KEY}"
+        )
+        resp = requests.get(search_url).json()
         return resp["items"][0]["snippet"]["channelId"]
 
     # /user/
     if "/user/" in link:
         user = link.split("/user/")[1].split("/")[0]
-        url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={user}&key={YOUTUBE_API_KEY}"
-        resp = requests.get(url).json()
+        search_url = (
+            "https://www.googleapis.com/youtube/v3/search?"
+            f"part=snippet&type=channel&q={user}&key={YOUTUBE_API_KEY}"
+        )
+        resp = requests.get(search_url).json()
         return resp["items"][0]["snippet"]["channelId"]
 
     # /channel/
     if "/channel/" in link:
         return link.split("/channel/")[1].split("/")[0]
 
-    raise ValueError("Não consegui identificar o canal a partir do link informado.")
+    raise ValueError("Não foi possível identificar o canal a partir do link informado.")
+    
 
 
 # ============================================================
-#   Lista vídeos recentes do canal
+#   LISTAR VÍDEOS — MODOS COMERCIAIS
 # ============================================================
-def listar_videos_canal(channel_id: str, max_videos: int = DEFAULT_MAX_VIDEOS) -> List[Dict]:
+
+# ---- MODO PADRÃO: Mais recentes ----
+def listar_videos_recentes(channel_id: str, max_videos: int) -> List[Dict]:
 
     url = "https://www.googleapis.com/youtube/v3/search"
     params = {
@@ -87,11 +100,7 @@ def listar_videos_canal(channel_id: str, max_videos: int = DEFAULT_MAX_VIDEOS) -
     }
 
     resp = requests.get(url, params=params)
-    if resp.status_code != 200:
-        raise RuntimeError(f"Erro ao listar vídeos: {resp.status_code} - {resp.text}")
-
     data = resp.json()
-
     return [
         {
             "video_id": item["id"]["videoId"],
@@ -102,8 +111,81 @@ def listar_videos_canal(channel_id: str, max_videos: int = DEFAULT_MAX_VIDEOS) -
     ]
 
 
+# ---- MODO: Mais vistos ----
+def listar_videos_mais_vistos(channel_id: str, max_videos: int) -> List[Dict]:
+
+    # Passo 1: pegar vídeos via search
+    url = "https://www.googleapis.com/youtube/v3/search"
+    params = {
+        "key": YOUTUBE_API_KEY,
+        "channelId": channel_id,
+        "part": "snippet",
+        "order": "date",
+        "maxResults": 50,   # buscar mais vídeos para melhor ranking
+        "type": "video",
+    }
+    resp = requests.get(url, params=params).json()
+
+    ids = [item["id"]["videoId"] for item in resp.get("items", [])]
+
+    # Passo 2: pegar estatísticas reais
+    stats_url = (
+        "https://www.googleapis.com/youtube/v3/videos?"
+        f"part=statistics,snippet&id={','.join(ids)}&key={YOUTUBE_API_KEY}"
+    )
+    stats = requests.get(stats_url).json()
+
+    videos = []
+    for item in stats.get("items", []):
+        videos.append({
+            "video_id": item["id"],
+            "video_title": item["snippet"]["title"],
+            "viewCount": int(item["statistics"].get("viewCount", 0)),
+            "commentCount": int(item["statistics"].get("commentCount", 0)),
+        })
+
+    # Ordenar por visualizações
+    videos_sorted = sorted(videos, key=lambda x: x["viewCount"], reverse=True)
+    return videos_sorted[:max_videos]
+
+
+# ---- MODO: Mais comentados ----
+def listar_videos_mais_comentados(channel_id: str, max_videos: int) -> List[Dict]:
+
+    url = "https://www.googleapis.com/youtube/v3/search"
+    params = {
+        "key": YOUTUBE_API_KEY,
+        "channelId": channel_id,
+        "part": "snippet",
+        "order": "date",
+        "maxResults": 50,
+        "type": "video",
+    }
+    resp = requests.get(url, params=params).json()
+
+    ids = [item["id"]["videoId"] for item in resp.get("items", [])]
+
+    stats_url = (
+        "https://www.googleapis.com/youtube/v3/videos?"
+        f"part=statistics,snippet&id={','.join(ids)}&key={YOUTUBE_API_KEY}"
+    )
+    stats = requests.get(stats_url).json()
+
+    videos = []
+    for item in stats.get("items", []):
+        videos.append({
+            "video_id": item["id"],
+            "video_title": item["snippet"]["title"],
+            "commentCount": int(item["statistics"].get("commentCount", 0)),
+        })
+
+    videos_sorted = sorted(videos, key=lambda x: x["commentCount"], reverse=True)
+    return videos_sorted[:max_videos]
+
+
+
 # ============================================================
-#   Coleta comentários de UM vídeo
+#   COLETAR COMENTÁRIOS DE UM VÍDEO
 # ============================================================
 def coletar_comentarios_video(video_id: str, max_comments: int = 200) -> List[Dict]:
 
@@ -154,22 +236,3 @@ def coletar_comentarios_video(video_id: str, max_comments: int = 200) -> List[Di
         time.sleep(0.3)
 
     return comentarios
-
-
-# ============================================================
-#   Coleta comentários de TODOS vídeos
-# ============================================================
-def coletar_comentarios_canal(canal_input: str,
-                              max_videos: int = DEFAULT_MAX_VIDEOS,
-                              max_comments_por_video: int = 200) -> pd.DataFrame:
-
-    channel_id = extrair_channel_id(canal_input)
-    videos = listar_videos_canal(channel_id, max_videos=max_videos)
-
-    all_comments = []
-    for v in videos:
-        vid = v["video_id"]
-        comments = coletar_comentarios_video(vid, max_comments_por_video)
-        all_comments.extend(comments)
-
-    return pd.DataFrame(all_comments)
