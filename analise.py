@@ -3,35 +3,51 @@ import numpy as np
 import pandas as pd
 import string
 
-# Tentativa de importar VADER
+# ============================================================
+#   IMPORTAR VADER — carrega apenas 1 vez
+# ============================================================
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+    sia = SentimentIntensityAnalyzer()
     VADER_AVAILABLE = True
 except ImportError:
     VADER_AVAILABLE = False
+    sia = None
 
-# Tentativa de importar BERT (Transformers)
+# ============================================================
+#   IMPORTAR BERT — usando cache do Streamlit
+# ============================================================
 try:
+    import streamlit as st
     from transformers import pipeline
+
+    @st.cache_resource
+    def carregar_modelo_bert():
+        return pipeline(
+            "sentiment-analysis",
+            model="nlptown/bert-base-multilingual-uncased-sentiment"
+        )
+
     BERT_AVAILABLE = True
-except ImportError:
+
+except Exception:
     BERT_AVAILABLE = False
+    carregar_modelo_bert = None
 
 
 # ============================================================
-#   PRÉ-PROCESSAMENTO
+#   PRÉ-PROCESSAMENTO E LIMPEZA
 # ============================================================
-
 def limpar_texto(texto: str) -> str:
     if pd.isna(texto):
-        return ""
+        return "texto_vazio"
 
     t = str(texto)
 
     # Remove URLs
     t = re.sub(r"http\S+|www\.\S+", "", t)
 
-    # Remove @menções e #hashtags
+    # Remove @ e #
     t = re.sub(r"[@#]\w+", "", t)
 
     # Remove números
@@ -40,16 +56,16 @@ def limpar_texto(texto: str) -> str:
     # Remove pontuação
     t = t.translate(str.maketrans("", "", string.punctuation))
 
-    # Espaços extras
+    # Normaliza espaços
     t = re.sub(r"\s+", " ", t).strip()
+
+    if t == "":
+        return "texto_limpo_vazio"
 
     return t.lower()
 
 
 def preprocessar_textos(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Adiciona coluna texto_limpo ao DataFrame.
-    """
     if "comment" not in df.columns:
         raise ValueError("A coluna 'comment' não existe no DataFrame.")
 
@@ -60,19 +76,19 @@ def preprocessar_textos(df: pd.DataFrame) -> pd.DataFrame:
 # ============================================================
 #   ANÁLISE DE SENTIMENTO – VADER
 # ============================================================
-
 def aplicar_vader(df: pd.DataFrame) -> pd.DataFrame:
     if not VADER_AVAILABLE:
-        print("⚠ Biblioteca VADER não encontrada. Instale com: pip install vaderSentiment")
         df["vader_compound"] = np.nan
         df["vader_label"] = "indefinido"
         return df
 
-    sia = SentimentIntensityAnalyzer()
-
-    df["vader_compound"] = df["texto_limpo"].apply(lambda t: sia.polarity_scores(t)["compound"])
+    df["vader_compound"] = df["texto_limpo"].apply(
+        lambda t: sia.polarity_scores(t)["compound"]
+    )
 
     def _classificar(comp):
+        if pd.isna(comp):
+            return "indefinido"
         if comp >= 0.05:
             return "positivo"
         elif comp <= -0.05:
@@ -84,26 +100,23 @@ def aplicar_vader(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ============================================================
-#   ANÁLISE DE SENTIMENTO – BERT (Transformers)
+#   ANÁLISE DE SENTIMENTO – BERT
 # ============================================================
-
 def aplicar_bert(df: pd.DataFrame) -> pd.DataFrame:
     if not BERT_AVAILABLE:
-        print("⚠ Transformers não disponível. Instale com: pip install transformers")
         df["bert_label_raw"] = "indefinido"
         df["bert_estrelas"] = np.nan
         df["bert_label"] = "indefinido"
         return df
 
-    print("Carregando modelo BERT (nlptown)… Aguarde...")
-    clf = pipeline("sentiment-analysis", model="nlptown/bert-base-multilingual-uncased-sentiment")
+    clf = carregar_modelo_bert()
 
     textos = df["texto_limpo"].fillna("").tolist()
     resultados = clf(textos, truncation=True)
 
     df["bert_label_raw"] = [r["label"] for r in resultados]
 
-    # Extrai número de estrelas da label
+    # extrair estrelas (1 a 5)
     estrelas = []
     for lab in df["bert_label_raw"]:
         nums = re.findall(r"\d+", lab)
