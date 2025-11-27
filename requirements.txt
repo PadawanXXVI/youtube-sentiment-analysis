@@ -1,24 +1,20 @@
 streamlit
+
 pandas
 numpy
 matplotlib
 seaborn
 requests
 
-# NLP / Transformers
 transformers
 torch
-huggingface-hub
 tokenizers
+huggingface-hub
 
-# Utilidades
+langdetect
 emoji
 regex
-langdetect
 
-# YouTube API
 google-api-python-client
 
-# Sentiment Analysis
 vaderSentiment
-sentencepiece
