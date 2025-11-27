@@ -60,7 +60,7 @@ def extrair_channel_id(link: str) -> str:
         return resp["items"][0]["snippet"]["channelId"]
 
     # @handle
-    if "@” in link:
+    if "@" in link:
         handle = link.split("@")[1].split("/")[0]
         url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={handle}&key={YOUTUBE_API_KEY}"
         return requests.get(url).json()["items"][0]["snippet"]["channelId"]
