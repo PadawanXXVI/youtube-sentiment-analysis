@@ -44,8 +44,8 @@ def extrair_channel_id(link: str) -> str:
         return resp["items"][0]["snippet"]["channelId"]
 
     # Handle @nome
-    if "/@" in link:
-        handle = link.split("/@")[1].split("/")[0]
+    if "/@" in link or link.startswith("@"):
+        handle = link.split("@")[1].split("/")[0]
         url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={handle}&key={YOUTUBE_API_KEY}"
         resp = requests.get(url).json()
         return resp["items"][0]["snippet"]["channelId"]
@@ -76,9 +76,6 @@ def extrair_channel_id(link: str) -> str:
 # ============================================================
 def listar_videos_canal(channel_id: str, max_videos: int = DEFAULT_MAX_VIDEOS) -> List[Dict]:
 
-    if not YOUTUBE_API_KEY:
-        raise ValueError("A variável YOUTUBE_API_KEY não foi carregada no Streamlit Secrets.")
-
     url = "https://www.googleapis.com/youtube/v3/search"
     params = {
         "key": YOUTUBE_API_KEY,
@@ -90,16 +87,16 @@ def listar_videos_canal(channel_id: str, max_videos: int = DEFAULT_MAX_VIDEOS) -
     }
 
     resp = requests.get(url, params=params)
-    data = resp.json()
-
     if resp.status_code != 200:
         raise RuntimeError(f"Erro ao listar vídeos: {resp.status_code} - {resp.text}")
+
+    data = resp.json()
 
     return [
         {
             "video_id": item["id"]["videoId"],
             "video_title": item["snippet"]["title"],
-            "video_published_at": item["snippet"]["publishedAt"],
+            "video_published_at": item["snippet"]["publishedAt"]
         }
         for item in data.get("items", [])
     ]
@@ -109,9 +106,6 @@ def listar_videos_canal(channel_id: str, max_videos: int = DEFAULT_MAX_VIDEOS) -
 #   Coleta comentários de UM vídeo
 # ============================================================
 def coletar_comentarios_video(video_id: str, max_comments: int = 200) -> List[Dict]:
-
-    if not YOUTUBE_API_KEY:
-        raise ValueError("A variável YOUTUBE_API_KEY não foi carregada no Streamlit Secrets.")
 
     url = "https://www.googleapis.com/youtube/v3/commentThreads"
     params = {
